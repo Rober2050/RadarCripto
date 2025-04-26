@@ -1,0 +1,39 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+ # Reglas de Desarrollo para RadarCripto (CURSOR AI)
+
+- Todo el código generado debe ser exclusivamente en **Kotlin** nativo para **Android**.
+- No generar código en Java ni en ningún otro lenguaje. **Solo Kotlin** siguiendo las convenciones de Android.
+- Utilizar las últimas tecnologías disponibles en Android, incluyendo:
+  - **Jetpack Compose** para interfaces de usuario.
+  - **Ktor** para consumo de APIs REST.
+  - **DataStore** para persistencia de configuración de usuario.
+  - **Room** para almacenamiento local de datos históricos.
+  - **WorkManager** para tareas de background (como actualizaciones automáticas de precios).
+- Mantener la arquitectura limpia y modular:
+  - Separar claramente responsabilidades entre pantallas, lógica de negocio y acceso a datos.
+  - Evitar acoplamientos fuertes entre componentes.
+- Todo nuevo código debe ser optimizado para:
+  - **Performance** (evitar procesos innecesarios en main thread).
+  - **Escalabilidad** (debe permitir agregar nuevas monedas o estrategias sin rehacer todo).
+  - **Mantenimiento sencillo** (comentarios claros donde la lógica sea compleja).
+- Los nombres de clases, funciones y variables deben seguir el estilo de codificación oficial de Kotlin para Android:
+  - `camelCase` para variables y funciones.
+  - `PascalCase` para clases.
+- Las funciones no deben superar las **50 líneas**. Si es necesario, modularizar.
+- Cada función nueva debe incluir una breve descripción en comentario sobre su propósito.
+- No generar código redundante o duplicado. Reutilizar componentes existentes siempre que sea posible.
+- Antes de proponer cambios, explicar en 1 párrafo:
+  1. Qué cambio se propone.
+  2. Por qué es necesario.
+  3. Qué archivos se verán afectados.
+- Mantener las mejores prácticas de seguridad al trabajar con datos sensibles como cotizaciones o configuraciones.
+
+# Nota Final
+- Estas reglas son de cumplimiento obligatorio para cada cambio, sugerencia o nuevo código generado en el proyecto RadarCripto.
+- El incumplimiento de estas reglas puede causar rechazo de cambios o necesidad de reescritura manual.
+
