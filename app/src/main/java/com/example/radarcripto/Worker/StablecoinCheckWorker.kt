@@ -1,64 +1,60 @@
-
 package com.example.radarcripto.worker
 
+import android.Manifest
 import android.content.Context
+import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.radarcripto.api.RetrofitService
+import com.example.radarcripto.api.DolarService
 import com.example.radarcripto.datastore.DataStoreManager
-import com.example.radarcripto.ui.StableCoin
 import com.example.radarcripto.util.NotificacionesUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.text.DecimalFormat
-import kotlinx.coroutines.flow.first
-
 
 class StablecoinCheckWorker(
     private val context: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override suspend fun doWork(): Result {
-	
-     
-	    val roiObjetivo = DataStoreManager.getRoiObjetivo(context).first()
+        return try {
+            val roiObjetivo = DataStoreManager.getRoiObjetivo(context).first()
 
+            val lista = withContext(Dispatchers.IO) {
+                DolarService.api.obtenerCotizaciones()
+            }
 
-        try {
-            for (moneda in StableCoin.values()) {
-                val resultado = verificarMoneda(moneda, roiObjetivo)
-                if (resultado != null) {
+            val oficial = lista.firstOrNull { it.casa == "oficial" }
+            val blue = lista.firstOrNull { it.casa == "blue" }
+
+            if (oficial == null || blue == null) {
+                Log.e("StablecoinWorker", "No se encontraron cotizaciones válidas")
+                return Result.failure()
+            }
+
+            val precioCompra = oficial.compra
+            val precioVenta = blue.venta
+
+            if (precioCompra > 0 && precioVenta > 0) {
+                val roi = ((precioVenta - precioCompra) / precioCompra) * 100
+                val formatter = DecimalFormat("#.##")
+
+                if (roi > roiObjetivo) {
                     NotificacionesUtils.mostrarNotificacion(
                         context,
-                        "Oportunidad en ${moneda.name}: ROI del ${resultado}%" 
+                        "Oportunidad detectada: ROI del ${formatter.format(roi)}%"
                     )
-                    return Result.success()
                 }
             }
+
+            Result.success()
         } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        return Result.success()
-    }
-
-    private suspend fun verificarMoneda(moneda: StableCoin, roiObjetivo: Double): String? {
-        return withContext(Dispatchers.IO) {
-            val cotizaciones = RetrofitService.api.obtenerPrecios(moneda.name.lowercase())
-
-            val mejoresAsk = cotizaciones.values.map { it.totalAsk }.filter { it > 0 }
-            val mejoresBid = cotizaciones.values.map { it.totalBid }.filter { it > 0 }
-
-            if (mejoresAsk.isEmpty() || mejoresBid.isEmpty()) return@withContext null
-
-            val mejorCompra = mejoresAsk.minOrNull() ?: return@withContext null
-            val mejorVenta = mejoresBid.maxOrNull() ?: return@withContext null
-
-            val roi = ((mejorVenta - mejorCompra) / mejorCompra) * 100
-            val formatter = DecimalFormat("#.##")
-
-            if (roi >= roiObjetivo) formatter.format(roi) else null
+            Log.e("StablecoinWorker", "Error ejecutando worker", e)
+            Result.failure()
         }
     }
 }

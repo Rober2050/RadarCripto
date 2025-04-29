@@ -7,17 +7,24 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import java.text.DecimalFormat
-import com.example.radarcripto.ui.theme.RadarCriptoTheme
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextFieldDefaults
 
+import com.example.radarcripto.ui.components.CustomOutlinedTextField
+
+import androidx.compose.runtime.Composable
 @Composable
-fun PantallaComparadorEstrategias() {
+fun PantallaComparadorEstrategias(navController: NavHostController) {
     var montoUSD by remember { mutableStateOf("1000") }
     var tasaStaking by remember { mutableStateOf("9.0") }
     var tasaCarry by remember { mutableStateOf("38.0") }
@@ -26,7 +33,7 @@ fun PantallaComparadorEstrategias() {
     var tipoCambioFuturo by remember { mutableStateOf("1000.0") }
 
     val formatter = DecimalFormat("#.##")
-    val scroll = rememberScrollState()
+    val scrollState = rememberScrollState()
 
     val monto = montoUSD.toDoubleOrNull() ?: 0.0
     val tasaAnualStaking = tasaStaking.toDoubleOrNull() ?: 0.0
@@ -41,107 +48,130 @@ fun PantallaComparadorEstrategias() {
     val usdFinalCarry = if (tcFuturo > 0) arsFinal / tcFuturo else 0.0
     val gananciaCarry = usdFinalCarry - monto
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        cursorColor = Color.White,
-        focusedLabelColor = Color.LightGray,
-        unfocusedLabelColor = Color.Gray,
-        focusedBorderColor = Color.LightGray,
-        unfocusedBorderColor = Color.Gray,
-        disabledBorderColor = Color.DarkGray,
-        errorBorderColor = Color.Red,
-        focusedContainerColor = Color.Transparent,
-        unfocusedContainerColor = Color.Transparent,
-        disabledContainerColor = Color.Transparent
-    )
-
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(scroll)
-            .background(Color(0xFF121212))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF0A0E25), Color(0xFF0B0F2D))
+                )
+            )
+            .padding(24.dp)
     ) {
-        Text("¿Qué me conviene hoy?", style = MaterialTheme.typography.titleLarge, color = Color.White)
-        Spacer(modifier = Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            Spacer(modifier = Modifier.height(24.dp)) // ✅ Bajamos el título
 
-        OutlinedTextField(
-            value = montoUSD,
-            onValueChange = { montoUSD = it },
-            label = { Text("Monto en USD", color = Color.White) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-            colors = fieldColors
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            OutlinedTextField(
-                value = tasaStaking,
-                onValueChange = { tasaStaking = it },
-                label = { Text("Tasa Staking USDT (APY %)", color = Color.White) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f).padding(end = 4.dp),
-                colors = fieldColors
+            Text(
+                text = "Comparar Estrategias",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color(0xFFD0D0FF)
             )
-            OutlinedTextField(
-                value = tasaCarry,
-                onValueChange = { tasaCarry = it },
-                label = { Text("Tasa Plazo Fijo ARS (TNA %)", color = Color.White) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f).padding(start = 4.dp),
-                colors = fieldColors
-            )
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            OutlinedTextField(
-                value = plazoDias,
-                onValueChange = { plazoDias = it },
-                label = { Text("Días", color = Color.White) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f).padding(end = 4.dp),
-                colors = fieldColors
-            )
-            OutlinedTextField(
-                value = tipoCambioHoy,
-                onValueChange = { tipoCambioHoy = it },
-                label = { Text("TC actual", color = Color.White) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f).padding(start = 4.dp),
-                colors = fieldColors
-            )
-        }
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = tipoCambioFuturo,
-            onValueChange = { tipoCambioFuturo = it },
-            label = { Text("TC futuro estimado", color = Color.White) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-            colors = fieldColors
-        )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2E))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    CustomOutlinedTextField(montoUSD, { montoUSD = it }, "Monto en USD")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CustomOutlinedTextField(tasaStaking, { tasaStaking = it }, "Staking USDT (APY%)", Modifier.weight(1f))
+                        CustomOutlinedTextField(tasaCarry, { tasaCarry = it }, "Plazo Fijo ARS (TNA%)", Modifier.weight(1f))
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CustomOutlinedTextField(plazoDias, { plazoDias = it }, "Días", Modifier.weight(1f))
+                        CustomOutlinedTextField(tipoCambioHoy, { tipoCambioHoy = it }, "TC Actual", Modifier.weight(1f))
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    CustomOutlinedTextField(tipoCambioFuturo, { tipoCambioFuturo = it }, "TC Futuro Estimado")
+                }
+            }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("🔐 Staking USDT → Ganancia: ${formatter.format(gananciaStaking)} USDT (${formatter.format((gananciaStaking / monto) * 100)}%)", color = Color.Cyan)
-        Text("💱 Carry Trade → Ganancia: ${formatter.format(gananciaCarry)} USD (${formatter.format((gananciaCarry / monto) * 100)}%)", color = if (gananciaCarry > gananciaStaking) Color.Green else Color.Yellow)
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Spacer(modifier = Modifier.height(24.dp))
-        if (gananciaCarry > gananciaStaking) {
-            Text("✅ Te conviene hacer CARRY TRADE", color = Color.Green)
-        } else {
-            Text("✅ Te conviene hacer STAKING EN USDT", color = Color.Cyan)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2E))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "🔐 Staking USDT → Ganancia: ${formatter.format(gananciaStaking)} USDT (${formatter.format((gananciaStaking / monto) * 100)}%)",
+                        color = Color.Cyan
+                    )
+                    Text(
+                        text = "💱 Carry Trade → Ganancia: ${formatter.format(gananciaCarry)} USD (${formatter.format((gananciaCarry / monto) * 100)}%)",
+                        color = if (gananciaCarry > gananciaStaking) Color.Green else Color.Cyan
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (gananciaCarry > gananciaStaking) {
+                Text(
+                    text = "✅ Te conviene hacer CARRY TRADE",
+                    color = Color.Green,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            } else {
+                Text(
+                    text = "✅ Te conviene hacer STAKING EN USDT",
+                    color = Color.Cyan,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
         }
     }
 }
 
-@Preview(showBackground = true, showSystemUi = true)
+
+
+
 @Composable
-fun PreviewPantallaComparadorEstrategias() {
-    RadarCriptoTheme {
-        PantallaComparadorEstrategias()
-    }
+fun CustomOutlinedTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier.fillMaxWidth()
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label, color = Color.White) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = modifier,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            cursorColor = Color.White,
+            focusedBorderColor = Color(0xFF4D9BFF),
+            unfocusedBorderColor = Color.Gray,
+            focusedLabelColor = Color(0xFF4D9BFF),
+            unfocusedLabelColor = Color.Gray
+        )
+    )
 }
+
+
+
+
+
+
+

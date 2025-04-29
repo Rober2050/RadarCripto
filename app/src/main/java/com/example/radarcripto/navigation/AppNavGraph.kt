@@ -12,19 +12,18 @@ import com.example.radarcripto.ui.*
 fun AppNavGraph(navController: NavHostController) {
     NavHost(
         navController = navController,
-        startDestination = "estrategiaDia"
+        startDestination = "home"
     ) {
-        composable("estrategiaDia") {
-            PantallaEstrategiaDelDia(navController)
-        }
         composable("home") {
             PantallaHome(navController)
         }
-        composable("simulador") {
-            PantallaSimuladorRoi()
-        }
         composable("comparador") {
-            PantallaComparadorEstrategias()
+            PantallaComparadorEstrategias(navController)
+        }
+
+
+        composable("simulador") {
+            PantallaSimuladorRoi(navController)
         }
         composable("configuracion") {
             PantallaConfiguracion(navController)

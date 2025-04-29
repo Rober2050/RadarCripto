@@ -1,12 +1,7 @@
 
-
-// Archivo: PantallaSimuladorRoi.kt
-// Propósito: Simulador de ROI + Comparador entre exchanges + Comparador contra dólar blue
-// Autor: RadarCripto Team
-// Última modificación: integración con https://dolarapi.com + manejo de errores
-
 package com.example.radarcripto.ui
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,404 +11,165 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.example.radarcripto.api.RetrofitService
-import com.example.radarcripto.datastore.DataStoreManager
-import com.example.radarcripto.util.NotificacionesUtils
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.collectLatest
+import androidx.navigation.NavHostController
+import com.example.radarcripto.api.DolarService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.DecimalFormat
-import java.util.Locale
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import java.net.HttpURLConnection
-import java.net.URL
-import org.json.JSONArray
-import org.json.JSONObject
-import com.example.radarcripto.ui.components.estiloTextFieldOscuro
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.radarcripto.ui.theme.RadarCriptoTheme
+import androidx.compose.material3.TextFieldDefaults
+import com.example.radarcripto.model.DolarApiResponse
 
-enum class StableCoin {
-    USDT, USDC, DAI
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-
-
-
-fun PantallaSimuladorRoi() {
-
-
-    val context = LocalContext.current
+fun PantallaSimuladorRoi(navController: NavHostController) {
     val scope = rememberCoroutineScope()
-    var roiObjetivo by remember { mutableStateOf(0.3) }
-    var precioCompra by remember { mutableStateOf("") }
-    var precioVenta by remember { mutableStateOf("") }
-    var resultadoROI by remember { mutableStateOf("") }
-    var oportunidadInversion by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) }
-    var montoInversion by remember { mutableStateOf("1000") }
-    var gananciaEnDinero by remember { mutableStateOf("") }
-    var monedaSeleccionada by remember { mutableStateOf(StableCoin.USDT) }
-
-    val cotizaciones = remember { mutableStateMapOf<String, Pair<Double, Double>>() }
     val scrollState = rememberScrollState()
 
-    // Lista de exchanges integrados vía CriptoYa
-    val exchanges = listOf(
-        "belo",           // ya integrado
-        "buenbit",        // ya integrado
-        "lemoncash",      // ya integrado
-        "ripio",          // ya integrado
-        "satoshitango",   // ya integrado
-        "binance",        // NUEVO: integración agregada
-        "bitso",          // NUEVO: integración agregada
-        //"bingx" sin cotizacion por ahora           // NUEVO: P2P, integración agregada
-    )
+    var precioCompraOficial by remember { mutableStateOf("") }
+    var precioVentaBlue by remember { mutableStateOf("") }
+    var montoInversion by remember { mutableStateOf("1000") }
 
+    var cotizacionOficial by remember { mutableStateOf<Double?>(null) }
+    var cotizacionBlue by remember { mutableStateOf<Double?>(null) }
+    var errorCarga by remember { mutableStateOf(false) }
 
+    var roiCalculado by remember { mutableStateOf<Double?>(null) }
+    var gananciaCalculada by remember { mutableStateOf<Double?>(null) }
+    var mensajeOportunidad by remember { mutableStateOf("") }
+
+    var isLoading by remember { mutableStateOf(false) }
+
+    fun calcularAutomaticamente() {
+        val compra = precioCompraOficial.toDoubleOrNull() ?: 0.0
+        val venta = precioVentaBlue.toDoubleOrNull() ?: 0.0
+        val monto = montoInversion.toDoubleOrNull() ?: 0.0
+
+        if (compra > 0 && venta > 0 && monto > 0) {
+            val roi = ((venta - compra) / compra) * 100
+            val ganancia = (venta - compra) * (monto / compra)
+
+            roiCalculado = roi
+            gananciaCalculada = ganancia
+            mensajeOportunidad = if (roi > 0) "✅ Oportunidad: Conviene comprar Oficial y vender Blue." else "Hoy no hay diferencia significativa."
+        } else {
+            mensajeOportunidad = "❌ Ingresá datos válidos para calcular."
+        }
+    }
 
     LaunchedEffect(Unit) {
-        DataStoreManager.getRoiObjetivo(context).collectLatest {
-            roiObjetivo = it
-        }
-    }
-
-    LaunchedEffect(monedaSeleccionada) {
-        isLoading = true
         try {
-            val todasLasRespuestas = withContext(Dispatchers.IO) {
-                RetrofitService.api.obtenerPrecios(monedaSeleccionada.name.lowercase())
-            }
-            cotizaciones.clear()
-            for (exchange in exchanges) {
-                val respuesta = todasLasRespuestas[exchange]
-                if (respuesta != null) {
-                    cotizaciones[exchange] = Pair(respuesta.totalBid, respuesta.totalAsk)
-                }
-            }
-            val mejorCompraEntry = cotizaciones.minByOrNull { it.value.second }  // Menor ask (compra)
-            val mejorVentaEntry = cotizaciones.maxByOrNull { it.value.first }   // Mayor bid (venta)
 
-            if (mejorCompraEntry != null && mejorVentaEntry != null) {
-                val mejorCompra = mejorCompraEntry.value.second
-                val mejorVenta = mejorVentaEntry.value.first
-                precioCompra = mejorCompra.toString()
-                precioVenta = mejorVenta.toString()
+            val responseList: List<DolarApiResponse> = DolarService.api.obtenerCotizaciones()
+            val precios: DolarApiResponse = responseList.first()
+
+            val lista: List<DolarApiResponse> = DolarService.api.obtenerCotizaciones()
+
+            val oficial = lista.firstOrNull { it.casa == "oficial" }?.venta ?: 0.0
+            val blue = lista.firstOrNull { it.casa == "blue" }?.venta ?: 0.0
+
+
+            if (oficial > 0 && blue > 0) {
+                cotizacionOficial = oficial
+                cotizacionBlue = blue
+
+                precioCompraOficial = oficial.toInt().toString()
+                precioVentaBlue = blue.toInt().toString()
+
+                calcularAutomaticamente()
+                errorCarga = false
+            } else {
+                Log.e("PantallaSimulador", "Cotizaciones inválidas: oficial=$oficial, blue=$blue")
+                errorCarga = true
             }
         } catch (e: Exception) {
-            cotizaciones.clear()
+            Log.e("PantallaSimulador", "Error cargando datos: ${e.localizedMessage}", e)
+            errorCarga = true
         }
-        isLoading = false
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp)
-            .background(Color(0xFF121212)),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Simulador de ROI", style = MaterialTheme.typography.titleLarge, color = Color.White)
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-            StableCoin.values().forEach { moneda ->
-                FilterChip(
-                    selected = monedaSeleccionada == moneda,
-                    onClick = { monedaSeleccionada = moneda },
-                    label = { Text(moneda.name) },
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    colors = FilterChipDefaults.filterChipColors()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF0A0E25), Color(0xFF0B0F2D))
                 )
-
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("ROI objetivo actual: $roiObjetivo%", color = Color.LightGray)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = precioCompra,
-            onValueChange = { precioCompra = it },
-            label = { Text("Compra", color = Color.White) },
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 40.dp), // 🔽 altura mínima más compacta
-            minLines = 1,
-            singleLine = true,
-            colors =  estiloTextFieldOscuro()
-
-
-    )
-
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = precioVenta,
-            onValueChange = { precioVenta = it },
-            label = { Text("Venta", color = Color.White) },
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-            modifier = Modifier
-                     .fillMaxWidth()
-                     .heightIn(min = 40.dp), // 🔽 altura mínima más compacta
-            minLines = 1,
-            singleLine = true,
-            colors =  estiloTextFieldOscuro()
-    )
-
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = montoInversion,
-            onValueChange = { montoInversion = it },
-            label = { Text("Monto a invertir (${monedaSeleccionada.name})", color = Color.White) },
-            keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 40.dp), // 🔽 altura mínima más compacta
-            minLines = 1,
-            singleLine = true,
-            colors =  estiloTextFieldOscuro()
             )
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Button(
-            onClick = {
-                val compra = precioCompra.toDoubleOrNull()
-                val venta = precioVenta.toDoubleOrNull()
-
-                if (compra != null && venta != null && compra > 0) {
-                    val roi = ((venta - compra) / compra) * 100
-                    val formatter = DecimalFormat("#.##")
-                    resultadoROI = "ROI: ${formatter.format(roi)}%"
-                    oportunidadInversion = roi >= roiObjetivo
-
-                    if (oportunidadInversion) {
-                        NotificacionesUtils.mostrarNotificacion(
-                            context,
-                            "¡ROI alcanzado del ${formatter.format(roi)}%! Posible oportunidad."
-                        )
-                        montoInversion.toDoubleOrNull()?.let {
-                            val ganancia = (roi / 100) * it
-                            gananciaEnDinero = "Ganancia estimada: ${formatter.format(ganancia)} ${monedaSeleccionada.name}"
-                        }
-                    } else {
-                        gananciaEnDinero = ""
-                    }
-                } else {
-                    resultadoROI = "Valores inválidos"
-                    oportunidadInversion = false
-                    gananciaEnDinero = ""
-                }
-            },
-            enabled = !isLoading
+            .padding(24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            Text("Calcular")
-        }
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // -----------------------------
-// Sección: ¿Dónde conviene comprar y vender hoy?
-// -----------------------------
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("¿Dónde conviene comprar y vender hoy?", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Spacer(modifier = Modifier.height(8.dp))
+            Text("Simulador de ROI", style = MaterialTheme.typography.headlineMedium, color = Color(0xFFD0D0FF))
 
-// Detectar exchange más barato (menor ASK) y más caro (mayor BID)
-        val mejorCompraEntry = cotizaciones.minByOrNull { it.value.second }
-        val mejorVentaEntry = cotizaciones.maxByOrNull { it.value.first }
-
-        if (mejorCompraEntry != null && mejorVentaEntry != null) {
-            val compra = mejorCompraEntry.value.second
-            val venta = mejorVentaEntry.value.first
-            val roi = if (compra > 0) ((venta - compra) / compra) * 100 else 0.0
-            val monto = montoInversion.toDoubleOrNull() ?: 0.0
-            val ganancia = (roi / 100) * monto
-            val formatter = DecimalFormat("#.##")
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("🛒 Comprar en: ${mejorCompraEntry.key.capitalize()} → $compra", color = Color.White)
-                Text("💰 Vender en: ${mejorVentaEntry.key.capitalize()} → $venta", color = Color.White)
-                Text("📈 ROI estimado: ${formatter.format(roi)}%", color = if (roi > 0) Color.Green else Color.Red)
-                if (roi > 0) {
-                    Text("✅ Ganancia estimada: ${formatter.format(ganancia)} ${monedaSeleccionada.name}", color = Color(0xFF66BB6A))
-                } else {
-                    Text("❌ No rentable actualmente", color = Color.Red)
-                }
-            }
-        }
-
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(resultadoROI, color = Color.White)
-        if (resultadoROI.isNotBlank()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            if (oportunidadInversion) {
-                Text("✅ Oportunidad de inversión alineada al ROI: $resultadoROI", color = Color(0xFF66BB6A))
-                if (gananciaEnDinero.isNotBlank()) {
-                    Text(gananciaEnDinero, color = Color.White)
-                }
-            } else {
-                Text("❌ No hay oportunidad de inversión", color = Color.Red)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("Cotizaciones ${monedaSeleccionada.name}/ARS (compra)", style = MaterialTheme.typography.titleMedium, color = Color.White)
-        Spacer(modifier = Modifier.height(8.dp))
-
-
-
-
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Exchange", color = Color.LightGray)
-                Text("Precio", color = Color.LightGray)
-            }
-            cotizaciones.forEach { (exchange, precios) ->
-                val color = if (precios.second == cotizaciones.values.minOfOrNull { it.second }) Color.Green else Color.White
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    val tipo = if (exchange == "bingx") " (P2P)" else " (Exchange)"
-                    Text(exchange.replaceFirstChar { it.uppercase() } + tipo, color = color)
-
-                    Text(String.format("%.4f", precios.second), color = color)
-                }
-            }
-        }
-
-        // Espaciado visual antes de mostrar la tabla de precios de venta
-        Spacer(modifier = Modifier.height(12.dp))
-
-// Título para la sección de cotizaciones de venta (totalBid)
-        Text(
-            "Cotizaciones ${monedaSeleccionada.name}/ARS (venta)",
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-// Contenedor general para la tabla de cotizaciones de venta
-        Column(modifier = Modifier.fillMaxWidth()) {
-
-            // Encabezado de la tabla: nombres de columnas
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Exchange", color = Color.LightGray) // Columna izquierda: nombre del exchange
-                Text("Precio", color = Color.LightGray)   // Columna derecha: precio de venta
+            when {
+                errorCarga -> Text("❌ Error al cargar precios. Intenta nuevamente.", color = Color.Red)
+                cotizacionOficial == null || cotizacionBlue == null -> Text("Cargando cotizaciones...", color = Color.LightGray)
+                else -> Text("Oficial: \$${cotizacionOficial?.toInt()} - Blue: \$${cotizacionBlue?.toInt()}", color = Color.White)
             }
 
-            // Recorremos el mapa de cotizaciones para mostrar los valores
-            cotizaciones.forEach { (exchange, precios) ->
+            listOf(
+                Triple(precioCompraOficial, { valor: String -> precioCompraOficial = valor }, "Precio Compra Oficial"),
+                Triple(precioVentaBlue, { valor: String -> precioVentaBlue = valor }, "Precio Venta Blue"),
+                Triple(montoInversion, { valor: String -> montoInversion = valor }, "Monto a Invertir en Pesos")
+            ).forEach { (value, setter, label) ->
 
-                // Si este precio de venta (bid) es el mayor, se resalta en celeste
-                val color = if (precios.first == cotizaciones.values.maxOfOrNull { it.first }) Color.Cyan else Color.White
-
-                // Fila con nombre del exchange y su respectivo precio de venta
-                Row(
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = setter,
+                    label = { Text(label, color = Color.White) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Nombre del exchange con la primera letra en mayúscula
-                    Text(exchange.replaceFirstChar { it.uppercase() }, color = color)
-
-                    // Mostramos el totalBid (precio de venta real)
-                    Text(String.format(Locale.US, "%.4f", precios.first), color = color)
-                }
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        cursorColor = Color.White,
+                        focusedIndicatorColor = Color(0xFF4D9BFF),
+                        unfocusedIndicatorColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF4D9BFF),
+                        unfocusedLabelColor = Color.Gray
+                    )
+                )
             }
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // -----------------------------
-// Sección: Comparación con Dólar Blue
-// -----------------------------
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("Comparación con el Dólar Blue", style = MaterialTheme.typography.titleMedium, color = Color.White)
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        val blueDolar = remember { mutableStateOf(0.0) }
-
-// Integración actualizada del dólar blue desde dolarapi.com con manejo de errores
-// Reemplaza la API de Dolarsi y evita mostrar un número por defecto si falla
-
-// Variables de estado
-
-        val blueDisponible = remember { mutableStateOf(true) }
-
-// Llamada HTTP segura
-        LaunchedEffect(Unit) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val url = URL("https://dolarapi.com/v1/dolares/blue")
-                    val conn = url.openConnection() as HttpURLConnection
-                    val response = conn.inputStream.bufferedReader().use { it.readText() }
-                    val jsonObject = JSONObject(response)
-                    val venta = jsonObject.getDouble("venta")
-                    if (venta > 0) {
-                        blueDolar.value = venta
-                        blueDisponible.value = true
-                    } else {
-                        blueDisponible.value = false
+            Button(
+                onClick = {
+                    scope.launch {
+                        isLoading = true
+                        delay(600)
+                        calcularAutomaticamente()
+                        isLoading = false
                     }
-                } catch (e: Exception) {
-                    blueDisponible.value = false
-                }
+                },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4D9BFF), contentColor = Color.White),
+                enabled = !isLoading
+            ) {
+                if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                else Text("Calcular")
+            }
+
+            roiCalculado?.let {
+                Text("ROI estimado: ${"%.2f".format(it)}%", color = if (it > 0) Color.Green else Color.Gray)
+            }
+
+            gananciaCalculada?.let {
+                Text("Ganancia estimada: \$${"%.2f".format(it)}", color = if (it > 0) Color.Green else Color.Gray)
+            }
+
+            if (mensajeOportunidad.isNotEmpty()) {
+                Text(text = mensajeOportunidad, color = if (roiCalculado != null && roiCalculado!! > 0) Color.Green else Color.Gray)
             }
         }
-
-
-        // Mostrar resultado si hay cotización de blue y un exchange para comparar
-        // En el bloque visual:
-        if (blueDisponible.value && mejorCompraEntry != null) {
-            val precioCripto = mejorCompraEntry.value.second
-            val roiVsBlue = ((blueDolar.value - precioCripto) / precioCripto) * 100
-            val formatter = DecimalFormat("#.##")
-            val monto = montoInversion.toDoubleOrNull() ?: 0.0
-            val ganancia = (roiVsBlue / 100) * monto
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("💵 Dólar Blue actual: ${blueDolar.value}", color = Color.White)
-                Text("🛒 Mejor precio USDT (para comprar): ${mejorCompraEntry.key.capitalize()} → $precioCripto", color = Color.White)
-                Text("📈 ROI contra dólar blue: ${formatter.format(roiVsBlue)}%", color = if (roiVsBlue > 0) Color.Green else Color.Red)
-                if (roiVsBlue > 0) {
-                    Text("✅ Ganancia estimada vendiendo al blue: ${formatter.format(ganancia)} ARS", color = Color(0xFF66BB6A))
-                } else {
-                    Text("❌ No rentable frente al blue actualmente", color = Color.Red)
-                }
-            }
-        } else {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("⚠️ No se pudo obtener la cotización del dólar blue o el mejor precio de compra aún no está disponible.", color = Color.Gray)
-                Text("🛠 Debug → Blue: ${blueDolar.value}, Compra: ${mejorCompraEntry?.value?.second ?: "null"}", color = Color.DarkGray)
-            }
-        }
-
-    }
-}
-
-
-
-// Para previsualizar la UX
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun PreviewPantallaComparador() {
-    RadarCriptoTheme {
-        PantallaSimuladorRoi()
     }
 }
